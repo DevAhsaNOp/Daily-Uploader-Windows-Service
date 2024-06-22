@@ -7,7 +7,7 @@
         /// </summary>
         static void Main()
         {
-            Service1 service1 = new Service1();
+            DailyUploaderService service1 = new DailyUploaderService();
             service1.OnDebug();
 
             //ServiceBase[] ServicesToRun;

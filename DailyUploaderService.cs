@@ -12,7 +12,7 @@ using System.Threading;
 namespace DailyUploader
 {
     [RunInstaller(true)]
-    public partial class Service1 : ServiceBase
+    public partial class DailyUploaderService : ServiceBase
     {
         public Thread worker = null;
         private static string LastProcessedHashPath = string.Empty;
@@ -28,7 +28,7 @@ namespace DailyUploader
         private readonly int RecordsToBeRead = Convert.ToInt32(ConfigurationSettings.AppSettings["RecordsToBeRead"]);
         private readonly int ReadAttendanceDaysCount = Convert.ToInt32(ConfigurationSettings.AppSettings["ReadAttendanceDaysCount"]);
 
-        public Service1()
+        public DailyUploaderService()
         {
             InitializeComponent();
         }
