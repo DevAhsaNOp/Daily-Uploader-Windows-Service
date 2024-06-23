@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Configuration;
+using System.Data;
 using System.Data.SqlClient;
 using System.IO;
 using System.ServiceProcess;
@@ -100,42 +101,113 @@ namespace DailyUploader
             }
         }
 
+        public void CalculateTotalPagesAndRowCountBetweenDates(int pageSize, DateTime? startDateTime, DateTime? endDateTime, out int totalPages, out int totalRowCount)
+        {
+            using (SqlConnection connection = new SqlConnection(ConnectionString))
+            {
+                using (SqlCommand command = new SqlCommand("spCalculateTotalPagesAndRowCountBetweenDates", connection))
+                {
+                    command.CommandType = CommandType.StoredProcedure;
+
+                    command.Parameters.Add(new SqlParameter("@PageSize", SqlDbType.Int)).Value = pageSize;
+                    command.Parameters.Add(new SqlParameter("@StartDateTime", SqlDbType.DateTime)).Value = (object)startDateTime ?? DBNull.Value;
+                    command.Parameters.Add(new SqlParameter("@EndDateTime", SqlDbType.DateTime)).Value = (object)endDateTime ?? DBNull.Value;
+
+                    SqlParameter totalPagesParam = new SqlParameter("@TotalPages", SqlDbType.Int)
+                    {
+                        Direction = ParameterDirection.Output
+                    };
+                    command.Parameters.Add(totalPagesParam);
+
+                    SqlParameter totalRowCountParam = new SqlParameter("@TotalRowCount", SqlDbType.Int)
+                    {
+                        Direction = ParameterDirection.Output
+                    };
+                    command.Parameters.Add(totalRowCountParam);
+
+                    connection.Open();
+                    command.ExecuteNonQuery();
+
+                    totalPages = (int)totalPagesParam.Value;
+                    totalRowCount = (int)totalRowCountParam.Value;
+
+                    logHandler.LogInformation($"Total pages: {totalPages}, Total row count: {totalRowCount}", DateTime.Now);
+                }
+            }
+        }
+
+        public List<AttendanceRecord> GetFilteredAttendanceBetweenDates(int pageNumber, int pageSize, DateTime? startDateTime, DateTime? endDateTime)
+        {
+            List<AttendanceRecord> attendanceRecords = new List<AttendanceRecord>();
+
+            using (SqlConnection connection = new SqlConnection(ConnectionString))
+            {
+                using (SqlCommand command = new SqlCommand("spGetFilteredAttendanceBetweenDates", connection))
+                {
+                    command.CommandType = CommandType.StoredProcedure;
+
+                    command.Parameters.Add(new SqlParameter("@PageNumber", SqlDbType.Int)).Value = pageNumber;
+                    command.Parameters.Add(new SqlParameter("@PageSize", SqlDbType.Int)).Value = pageSize;
+                    command.Parameters.Add(new SqlParameter("@StartDateTime", SqlDbType.DateTime)).Value = (object)startDateTime ?? DBNull.Value;
+                    command.Parameters.Add(new SqlParameter("@EndDateTime", SqlDbType.DateTime)).Value = (object)endDateTime ?? DBNull.Value;
+
+                    connection.Open();
+                    using (SqlDataReader reader = command.ExecuteReader())
+                    {
+                        if (!reader.HasRows)
+                        {
+                            logHandler.LogInformation("No new records found in the local database.", DateTime.Now);
+                            return attendanceRecords;
+                        }
+
+                        while (reader.Read())
+                        {
+                            AttendanceRecord record = new AttendanceRecord
+                            {
+                                EmployeeId = reader.GetInt64(reader.GetOrdinal("EmployeeId")),
+                                InOutType = reader.GetString(reader.GetOrdinal("InOutType"))[0],
+                                DateTime = reader.GetDateTime(reader.GetOrdinal("DateTime"))
+                            };
+
+                            attendanceRecords.Add(record);
+                        }
+
+                        logHandler.LogInformation($"{attendanceRecords.Count} new records found in the local database.", DateTime.Now);
+                    }
+                }
+            }
+
+            return attendanceRecords;
+        }
+
         private List<AttendanceRecord> FetchNewRecords()
         {
             var newRecords = new List<AttendanceRecord>();
 
-            using (var connection = new SqlConnection(ConnectionString))
+            var startDateTime = DateTime.Now.AddDays(-ReadAttendanceDaysCount);
+            var endDateTime = DateTime.Now;
+
+            CalculateTotalPagesAndRowCountBetweenDates(RecordsToBeRead, startDateTime, endDateTime, out int totalPages, out int totalRowCount);
+
+            if (totalPages == 0)
             {
-                connection.Open();
-                var query = $"SELECT TOP {RecordsToBeRead} * FROM tblAttendance";
-                using (var command = new SqlCommand(query, connection))
-                using (var reader = command.ExecuteReader())
+                logHandler.LogInformation("No new records found in the local database.", DateTime.Now);
+                return newRecords;
+            }
+
+            for (int i = 1; i <= totalPages; i++)
+            {
+                var records = GetFilteredAttendanceBetweenDates(i, RecordsToBeRead, startDateTime, endDateTime);
+
+                foreach (var record in records)
                 {
-                    if (!reader.HasRows)
+                    var hash = HashGenerator.GenerateHash(record);
+
+                    if (!ProcessedHashes.Contains(hash))
                     {
-                        logHandler.LogInformation("No new records found in the server database.", DateTime.Now);
-                        return newRecords;
+                        record.UQHash = hash;
+                        newRecords.Add(record);
                     }
-
-                    while (reader.Read())
-                    {
-                        var record = new AttendanceRecord
-                        {
-                            EmployeeId = reader.GetInt64(1),
-                            InOutType = reader.GetString(2)[0],
-                            DateTime = reader.GetDateTime(3),
-                        };
-
-                        var hash = HashGenerator.GenerateHash(record);
-
-                        if (!ProcessedHashes.Contains(hash))
-                        {
-                            record.UQHash = hash;
-                            newRecords.Add(record);
-                        }
-                    }
-
-                    logHandler.LogInformation($"{newRecords.Count} new records found in the server database.", DateTime.Now);
                 }
             }
 
