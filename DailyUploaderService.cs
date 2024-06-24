@@ -184,7 +184,7 @@ namespace DailyUploader
         {
             var newRecords = new List<AttendanceRecord>();
 
-            var startDateTime = DateTime.Now.AddDays(-ReadAttendanceDaysCount);
+            var startDateTime = DateTime.Now.AddDays(-ReadAttendanceDaysCount).Date;
             var endDateTime = DateTime.Now;
 
             CalculateTotalPagesAndRowCountBetweenDates(RecordsToBeRead, startDateTime, endDateTime, out int totalPages, out int totalRowCount);
