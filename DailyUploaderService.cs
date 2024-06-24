@@ -1,13 +1,18 @@
 ﻿using DailyUploader.Logger;
 using DailyUploader.Logger.Interface;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Configuration;
 using System.Data;
 using System.Data.SqlClient;
+using System.IdentityModel.Tokens.Jwt;
 using System.IO;
+using System.Linq;
+using System.Net.Http;
 using System.ServiceProcess;
+using System.Text;
 using System.Threading;
 
 namespace DailyUploader
@@ -16,8 +21,12 @@ namespace DailyUploader
     public partial class DailyUploaderService : ServiceBase
     {
         public Thread worker = null;
+        private static long UserId = 0;
+        private static string AuthToken = string.Empty;
+        private static string RefreshToken = string.Empty;
         private static string LastProcessedHashPath = string.Empty;
         private static HashSet<string> ProcessedHashes = new HashSet<string>();
+        private readonly string BaseURL = ConfigurationSettings.AppSettings["BaseURL"];
         private static readonly System.Timers.Timer timer = new System.Timers.Timer(120000);
         private readonly string UserEmail = ConfigurationSettings.AppSettings["UserEmail"];
         private readonly ICustomLogHandler logHandler = new CustomLogHandler(LogsBaseDir);
@@ -61,6 +70,8 @@ namespace DailyUploader
         {
             while (true)
             {
+                Login();
+
                 LoadProcessedHashes();
 
                 // Fetch new records
@@ -166,7 +177,7 @@ namespace DailyUploader
                             {
                                 EmployeeId = reader.GetInt64(reader.GetOrdinal("EmployeeId")),
                                 InOutType = reader.GetString(reader.GetOrdinal("InOutType"))[0],
-                                DateTime = reader.GetDateTime(reader.GetOrdinal("DateTime"))
+                                Date = reader.GetDateTime(reader.GetOrdinal("DateTime"))
                             };
 
                             attendanceRecords.Add(record);
@@ -214,24 +225,79 @@ namespace DailyUploader
             return newRecords;
         }
 
-        private void InsertRecordsToServer(List<AttendanceRecord> newRecords)
+        private async void InsertRecordsToServer(List<AttendanceRecord> newRecords)
         {
-            using (var connection = new SqlConnection(ConnectionString))
+            var apiURL = $"{BaseURL}OnTimeBackLog/BulkCreate";
+
+            newRecords.ForEach(r =>
             {
-                connection.Open();
-                foreach (var record in newRecords)
+                r.CreatedBy = UserId;
+                r.Status = 1;
+            });
+
+            var jsonData = JsonConvert.SerializeObject(newRecords);
+
+            using (HttpClient client = new HttpClient())
+            {
+                client.DefaultRequestHeaders.Add("Authorization", $"Bearer {AuthToken}");
+                // Allow Origin
+                client.DefaultRequestHeaders.Add("Access-Control-Allow-Origin", "*");
+                var content = new StringContent(jsonData, Encoding.UTF8, "application/json");
+                var response = await client.PostAsync(apiURL, content);
+
+                if (response.IsSuccessStatusCode)
                 {
-                    var query = "INSERT INTO [dbo].[tblAttendanceServer] ([EmployeeId] ,[InOutType] ,[DateTime]) VALUES (@EmpID, @InOut, @DateTime)";
-                    using (var command = new SqlCommand(query, connection))
-                    {
-                        command.Parameters.AddWithValue("@InOut", record.InOutType);
-                        command.Parameters.AddWithValue("@EmpID", record.EmployeeId);
-                        command.Parameters.AddWithValue("@DateTime", record.DateTime);
-                        command.ExecuteNonQuery();
-                    }
+                    var responseContent = await response.Content.ReadAsStringAsync();
+                    var responseJson = JsonConvert.DeserializeObject<dynamic>(responseContent);
+                    logHandler.LogInformation($"{newRecords.Count} new records inserted into the server database with message {responseJson.message}", DateTime.Now);
+                    logHandler.LogInformation(responseJson.message, DateTime.Now);
                 }
-                logHandler.LogInformation($"{newRecords.Count} new records inserted into the server database.", DateTime.Now);
+                else
+                    logHandler.LogError("Inserting new records into the server database failed!", DateTime.Now);
             }
+        }
+
+        private void Login()
+        {
+            var loginURL = $"{BaseURL}User/Login";
+            var loginData = new Dictionary<string, string>
+            {
+                { "email", UserEmail },
+                { "password", HashGenerator.Decryptor(UserPassword) }
+            };
+
+            var jsonData = JsonConvert.SerializeObject(loginData);
+
+            using (HttpClient client = new HttpClient())
+            {
+                var content = new StringContent(jsonData, Encoding.UTF8, "application/json");
+                var response = client.PostAsync(loginURL, content).Result;
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseContent = response.Content.ReadAsStringAsync().Result;
+                    dynamic responseJson = JsonConvert.DeserializeObject<dynamic>(responseContent);
+
+                    AuthToken = responseJson.result.access_Token;
+                    RefreshToken = responseJson.result.refresh_Token;
+
+                    TokenDecoder(AuthToken);
+
+                    logHandler.LogInformation("Login successful!", DateTime.Now);
+                }
+                else
+                    logHandler.LogError("Login failed!", DateTime.Now);
+            }
+        }
+
+        private void TokenDecoder(string token)
+        {
+            var tokenHandler = new JwtSecurityTokenHandler();
+
+            var jwtToken = tokenHandler.ReadJwtToken(token);
+            var claims = jwtToken.Claims.ToList();
+
+            UserId = Convert.ToInt64(claims.FirstOrDefault(c => c.Type == "UserId").Value);
         }
 
         private void LoadProcessedHashes()
