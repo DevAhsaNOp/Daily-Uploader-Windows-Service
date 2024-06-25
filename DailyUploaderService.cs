@@ -26,17 +26,17 @@ namespace DailyUploader
         private static string RefreshToken = string.Empty;
         private static string LastProcessedHashPath = string.Empty;
         private static HashSet<string> ProcessedHashes = new HashSet<string>();
-        private readonly string BaseURL = ConfigurationSettings.AppSettings["BaseURL"];
+        private readonly string BaseURL = ConfigurationManager.AppSettings["BaseURL"];
         private static readonly System.Timers.Timer timer = new System.Timers.Timer(120000);
-        private readonly string UserEmail = ConfigurationSettings.AppSettings["UserEmail"];
+        private readonly string UserEmail = ConfigurationManager.AppSettings["UserEmail"];
         private readonly ICustomLogHandler logHandler = new CustomLogHandler(LogsBaseDir);
-        private readonly string UserPassword = ConfigurationSettings.AppSettings["UserPassword"];
-        private readonly static string LogsBaseDir = ConfigurationSettings.AppSettings["LogsBaseDir"];
-        private readonly string ConnectionString = ConfigurationSettings.AppSettings["ConnectionString"];
-        private readonly string ProcessedHashBaseDir = ConfigurationSettings.AppSettings["ProcessedHashBaseDir"];
-        private readonly int ScheduleTime = Convert.ToInt32(ConfigurationSettings.AppSettings["ScheduleTime"]);
-        private readonly int RecordsToBeRead = Convert.ToInt32(ConfigurationSettings.AppSettings["RecordsToBeRead"]);
-        private readonly int ReadAttendanceDaysCount = Convert.ToInt32(ConfigurationSettings.AppSettings["ReadAttendanceDaysCount"]);
+        private readonly string UserPassword = ConfigurationManager.AppSettings["UserPassword"];
+        private readonly static string LogsBaseDir = ConfigurationManager.AppSettings["LogsBaseDir"];
+        private readonly string ConnectionString = ConfigurationManager.AppSettings["ConnectionString"];
+        private readonly string ProcessedHashBaseDir = ConfigurationManager.AppSettings["ProcessedHashBaseDir"];
+        private readonly int ScheduleTime = Convert.ToInt32(ConfigurationManager.AppSettings["ScheduleTime"]);
+        private readonly int RecordsToBeRead = Convert.ToInt32(ConfigurationManager.AppSettings["RecordsToBeRead"]);
+        private readonly int ReadAttendanceDaysCount = Convert.ToInt32(ConfigurationManager.AppSettings["ReadAttendanceDaysCount"]);
 
         public DailyUploaderService()
         {
