@@ -15,7 +15,7 @@ namespace DailyUploader
             serviceInstaller = new ServiceInstaller();
             processInstaller = new ServiceProcessInstaller();
 
-            serviceInstaller.ServiceName = "Daily Uploader WS";
+            serviceInstaller.ServiceName = "DailyUploaderTest";
             serviceInstaller.StartType = ServiceStartMode.Automatic;
 
             processInstaller.Account = ServiceAccount.LocalSystem;

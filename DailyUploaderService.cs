@@ -175,7 +175,8 @@ namespace DailyUploader
                         {
                             AttendanceRecord record = new AttendanceRecord
                             {
-                                EmployeeId = reader.GetInt64(reader.GetOrdinal("EmployeeId")),
+                                //EmployeeId = reader.GetInt64(reader.GetOrdinal("EmployeeId")),
+                                TextCardNumber = reader.GetString(reader.GetOrdinal("TextCardNumber")),
                                 InOutType = reader.GetString(reader.GetOrdinal("InOutType"))[0],
                                 Date = reader.GetDateTime(reader.GetOrdinal("DateTime"))
                             };

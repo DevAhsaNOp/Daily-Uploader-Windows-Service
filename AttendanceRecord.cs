@@ -4,7 +4,8 @@ namespace DailyUploader
 {
     public sealed class AttendanceRecord
     {
-        public long EmployeeId { get; set; }
+        public long? EmployeeId { get; set; }
+        public string TextCardNumber { get; set; }
         public DateTime Date { get; set; }
         public char InOutType { get; set; }
         public long CreatedBy { get; set; }
