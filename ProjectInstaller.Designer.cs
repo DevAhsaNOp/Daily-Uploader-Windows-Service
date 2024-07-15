@@ -1,4 +1,4 @@
-﻿namespace DailyUploader
+﻿namespace DailyUploaderService
 {
     partial class ProjectInstaller
     {
@@ -39,7 +39,7 @@
             // 
             // serviceInstaller1
             // 
-            this.serviceInstaller1.ServiceName = "DailyUploaderTest";
+            this.serviceInstaller1.ServiceName = "DUploaderService";
             this.serviceInstaller1.StartType = System.ServiceProcess.ServiceStartMode.Automatic;
             // 
             // ProjectInstaller

@@ -129,7 +129,6 @@ namespace DailyUploader
                         Direction = ParameterDirection.Output
                     };
                     command.Parameters.Add(totalPagesParam);
-
                     SqlParameter totalRowCountParam = new SqlParameter("@TotalRowCount", SqlDbType.Int)
                     {
                         Direction = ParameterDirection.Output
