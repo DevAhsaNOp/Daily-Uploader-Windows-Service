@@ -1,6 +1,4 @@
-﻿using System.ServiceProcess;
-
-namespace DailyUploader
+﻿namespace DailyUploader
 {
     internal static class Program
     {
@@ -9,15 +7,15 @@ namespace DailyUploader
         /// </summary>
         static void Main()
         {
-            //DailyUploaderService service1 = new DailyUploaderService();
-            //service1.OnDebug();
+            DailyUploaderService service1 = new DailyUploaderService();
+            service1.OnDebug();
 
-            ServiceBase[] ServicesToRun;
-            ServicesToRun = new ServiceBase[]
-            {
-                new DailyUploaderService()
-            };
-            ServiceBase.Run(ServicesToRun);
+            //ServiceBase[] ServicesToRun;
+            //ServicesToRun = new ServiceBase[]
+            //{
+            //    new DailyUploaderService()
+            //};
+            //ServiceBase.Run(ServicesToRun);
         }
     }
 }

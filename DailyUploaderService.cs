@@ -1,5 +1,6 @@
 ﻿using DailyUploader.Logger;
 using DailyUploader.Logger.Interface;
+using DailyUploaderService;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
@@ -36,7 +37,9 @@ namespace DailyUploader
         private readonly string ProcessedHashBaseDir = ConfigurationManager.AppSettings["ProcessedHashBaseDir"];
         private readonly int ScheduleTime = Convert.ToInt32(ConfigurationManager.AppSettings["ScheduleTime"]);
         private readonly int RecordsToBeRead = Convert.ToInt32(ConfigurationManager.AppSettings["RecordsToBeRead"]);
-        private readonly int ReadAttendanceDaysCount = Convert.ToInt32(ConfigurationManager.AppSettings["ReadAttendanceDaysCount"]);
+        private static readonly int ReadAttendanceDaysCount = Convert.ToInt32(ConfigurationManager.AppSettings["ReadAttendanceDaysCount"]);
+        private DateTime? _startDateTime = null;
+        private DateTime? _endDateTime = null;
 
         public DailyUploaderService()
         {
@@ -80,6 +83,9 @@ namespace DailyUploader
                 // Insert new records into the server database
                 if (newRecords.Count > 0)
                 {
+                    logHandler.LogInformation($"App Config records uploading to the server database.", DateTime.Now);
+                    UploadAppConfig();
+
                     logHandler.LogInformation("Inserting new records into the server database.", DateTime.Now);
                     InsertRecordsToServer(newRecords);
 
@@ -174,8 +180,8 @@ namespace DailyUploader
                         {
                             AttendanceRecord record = new AttendanceRecord
                             {
-                                //EmployeeId = reader.GetInt64(reader.GetOrdinal("EmployeeId")),
-                                TextCardNumber = reader.GetString(reader.GetOrdinal("TextCardNumber")),
+                                EmployeeId = reader.GetInt64(reader.GetOrdinal("EmployeeId")),
+                                //TextCardNumber = reader.GetString(reader.GetOrdinal("TextCardNumber")),
                                 InOutType = reader.GetString(reader.GetOrdinal("InOutType"))[0],
                                 Date = reader.GetDateTime(reader.GetOrdinal("DateTime"))
                             };
@@ -197,6 +203,8 @@ namespace DailyUploader
 
             var startDateTime = DateTime.Now.AddDays(-ReadAttendanceDaysCount).Date;
             var endDateTime = DateTime.Now;
+            _startDateTime = startDateTime;
+            _endDateTime = endDateTime;
 
             CalculateTotalPagesAndRowCountBetweenDates(RecordsToBeRead, startDateTime, endDateTime, out int totalPages, out int totalRowCount);
 
@@ -225,7 +233,7 @@ namespace DailyUploader
             return newRecords;
         }
 
-        private async void InsertRecordsToServer(List<AttendanceRecord> newRecords)
+        private void InsertRecordsToServer(List<AttendanceRecord> newRecords)
         {
             var apiURL = $"{BaseURL}OnTimeBackLog/BulkCreate";
 
@@ -240,17 +248,18 @@ namespace DailyUploader
             using (HttpClient client = new HttpClient())
             {
                 client.DefaultRequestHeaders.Add("Authorization", $"Bearer {AuthToken}");
-                // Allow Origin
                 client.DefaultRequestHeaders.Add("Access-Control-Allow-Origin", "*");
+
                 var content = new StringContent(jsonData, Encoding.UTF8, "application/json");
-                var response = await client.PostAsync(apiURL, content);
+                logHandler.LogInformation($"Inserting new records into the server database.\n Data: {jsonData}", DateTime.Now);
+                var response = client.PostAsync(apiURL, content).Result;
 
                 if (response.IsSuccessStatusCode)
                 {
-                    var responseContent = await response.Content.ReadAsStringAsync();
+                    var responseContent = response.Content.ReadAsStringAsync().Result;
                     var responseJson = JsonConvert.DeserializeObject<dynamic>(responseContent);
                     logHandler.LogInformation($"{newRecords.Count} new records inserted into the server database with message {responseJson.message}", DateTime.Now);
-                    logHandler.LogInformation(responseJson.message, DateTime.Now);
+                    logHandler.LogInformation($"{responseJson.message}", DateTime.Now);
                 }
                 else
                     logHandler.LogError("Inserting new records into the server database failed!", DateTime.Now);
@@ -300,6 +309,77 @@ namespace DailyUploader
             UserId = Convert.ToInt64(claims.FirstOrDefault(c => c.Type == "UserId").Value);
         }
 
+        private void UploadAppConfig()
+        {
+            var apiURL = $"{BaseURL}Generic/BulkCreate";
+            var genricRequest = new List<GenericRecord>
+            {
+                new GenericRecord
+                {
+                    Key = "LogsBaseDir",
+                    Value = LogsBaseDir
+                },
+                new GenericRecord
+                {
+                    Key = "ConnectionString",
+                    Value = ConnectionString
+                },
+                new GenericRecord
+                {
+                    Key = "ProcessedHashBaseDir",
+                    Value = ProcessedHashBaseDir
+                },
+                new GenericRecord
+                {
+                    Key = "ScheduleTime",
+                    Value = ScheduleTime.ToString()
+                },
+                new GenericRecord
+                {
+                    Key = "RecordsToBeRead",
+                    Value = RecordsToBeRead.ToString()
+                },
+                new GenericRecord
+                {
+                    Key = "ReadAttendanceDaysCount",
+                    Value = ReadAttendanceDaysCount.ToString()
+                },
+                new GenericRecord
+                {
+                    Key = "DatesWhichRecordsHasBeenProcessed",
+                    Value = $"{_startDateTime} to {_endDateTime}"
+                },
+            };
+
+            genricRequest.ForEach(r =>
+            {
+                r.CreatedBy = UserId;
+                r.Status = 1;
+            });
+
+            var jsonData = JsonConvert.SerializeObject(genricRequest);
+
+            using (HttpClient client = new HttpClient())
+            {
+                client.DefaultRequestHeaders.Add("Authorization", $"Bearer {AuthToken}");
+                client.DefaultRequestHeaders.Add("Access-Control-Allow-Origin", "*");
+
+                var content = new StringContent(jsonData, Encoding.UTF8, "application/json");
+                logHandler.LogInformation($"Inserting App Config Data into the server database.\n Data: {jsonData}", DateTime.Now);
+                var response = client.PostAsync(apiURL, content).Result;
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseContent = response.Content.ReadAsStringAsync().Result;
+                    var responseJson = JsonConvert.DeserializeObject<dynamic>(responseContent);
+                    logHandler.LogInformation($"{genricRequest.Count} App Config Data inserted into the server database with message {responseJson.message}", DateTime.Now);
+                    logHandler.LogInformation($"{responseJson}", DateTime.Now);
+                }
+                else
+                    logHandler.LogError("Inserting App Config Data into the server database failed!", DateTime.Now);
+            }
+        }
+
         private void LoadProcessedHashes()
         {
             GetLastProcessedHashPath();
@@ -319,54 +399,141 @@ namespace DailyUploader
 
         private void GetLastProcessedHashPath()
         {
-            using (var conn = new SqlConnection(ConnectionString))
+            var key = "LastProcessedHashPath";
+            var apiURL = $"{BaseURL}Generic/GetValueByKey?key={key}";
+
+            using (HttpClient client = new HttpClient())
             {
-                conn.Open();
-                using (var cmd = new SqlCommand("SELECT TOP 1 Value FROM tblGeneric WHERE [Key] = 'LastProcessedHashPath' ", conn))
+                client.DefaultRequestHeaders.Add("Authorization", $"Bearer {AuthToken}");
+                client.DefaultRequestHeaders.Add("Access-Control-Allow-Origin", "*");
+
+                var response = client.GetAsync(apiURL).Result;
+
+                if (response.IsSuccessStatusCode)
                 {
-                    using (var reader = cmd.ExecuteReader())
-                    {
-                        if (reader.Read())
-                        {
-                            LastProcessedHashPath = reader.GetString(0);
-                            if (string.IsNullOrEmpty(LastProcessedHashPath))
-                                logHandler.LogError("Last processed hash path is empty.", DateTime.Now);
-                            else
-                                logHandler.LogInformation($"Last processed hash path found!", DateTime.Now);
-                        }
-                        else
-                            logHandler.LogInformation($"Last processed hash path is not found!", DateTime.Now);
-                    }
+                    var responseContent = response.Content.ReadAsStringAsync().Result;
+                    var responseJson = JsonConvert.DeserializeObject<dynamic>(responseContent);
+
+                    LastProcessedHashPath = responseJson.result;
+                    if (string.IsNullOrEmpty(LastProcessedHashPath))
+                        logHandler.LogError("Last processed hash path is empty.", DateTime.Now);
+                    else
+                        logHandler.LogInformation("Last processed hash path found!", DateTime.Now);
                 }
+                else
+                    logHandler.LogError("Last processed hash path is not found!", DateTime.Now);
             }
+
+            //using (var conn = new SqlConnection(ConnectionString))
+            //{
+            //    conn.Open();
+            //    using (var cmd = new SqlCommand("SELECT TOP 1 Value FROM tblGeneric WHERE [Key] = 'LastProcessedHashPath' ", conn))
+            //    {
+            //        using (var reader = cmd.ExecuteReader())
+            //        {
+            //            if (reader.Read())
+            //            {
+            //                LastProcessedHashPath = reader.GetString(0);
+            //                if (string.IsNullOrEmpty(LastProcessedHashPath))
+            //                    logHandler.LogError("Last processed hash path is empty.", DateTime.Now);
+            //                else
+            //                    logHandler.LogInformation($"Last processed hash path found!", DateTime.Now);
+            //            }
+            //            else
+            //                logHandler.LogInformation($"Last processed hash path is not found!", DateTime.Now);
+            //        }
+            //    }
+            //}
         }
 
         private void UpdateLastProcessedHashPath(string hashPath)
         {
-            using (var conn = new SqlConnection(ConnectionString))
+            var apiURL = $"{BaseURL}Generic/UpdateByKey";
+            var genricRequest = new GenericRecord
             {
-                conn.Open();
-                using (var cmd = new SqlCommand("UPDATE tblGeneric SET Value = @hashPath WHERE [Key] = 'LastProcessedHashPath'", conn))
+                Key = "LastProcessedHashPath",
+                Value = hashPath,
+                UpdatedBy = UserId,
+                Status = 1
+            };
+
+            var jsonData = JsonConvert.SerializeObject(genricRequest);
+
+            using (HttpClient client = new HttpClient())
+            {
+                client.DefaultRequestHeaders.Add("Authorization", $"Bearer {AuthToken}");
+                client.DefaultRequestHeaders.Add("Access-Control-Allow-Origin", "*");
+
+                var content = new StringContent(jsonData, Encoding.UTF8, "application/json");
+                logHandler.LogInformation($"Updating Last processed hash path into the server database.\n Data: {jsonData}", DateTime.Now);
+                var response = client.PostAsync(apiURL, content).Result;
+
+                if (response.IsSuccessStatusCode)
                 {
-                    cmd.Parameters.AddWithValue("@hashPath", hashPath);
-                    cmd.ExecuteNonQuery();
-                    logHandler.LogInformation("Last processed hash path updated successfully!", DateTime.Now);
+                    var responseContent = response.Content.ReadAsStringAsync().Result;
+                    var responseJson = JsonConvert.DeserializeObject<dynamic>(responseContent);
+                    logHandler.LogInformation($"{genricRequest} Last processed hash path updated into the server database with message {responseJson.message}", DateTime.Now);
+                    logHandler.LogInformation($"{responseJson}", DateTime.Now);
                 }
+                else
+                    logHandler.LogError("Updating Last processed hash path into the server database failed!", DateTime.Now);
             }
+
+            //using (var conn = new SqlConnection(ConnectionString))
+            //{
+            //    conn.Open();
+            //    using (var cmd = new SqlCommand("UPDATE tblGeneric SET Value = @hashPath WHERE [Key] = 'LastProcessedHashPath'", conn))
+            //    {
+            //        cmd.Parameters.AddWithValue("@hashPath", hashPath);
+            //        cmd.ExecuteNonQuery();
+            //        logHandler.LogInformation("Last processed hash path updated successfully!", DateTime.Now);
+            //    }
+            //}
         }
 
         private void InsertLastProcessedHashPath(string hashPath)
         {
-            using (var conn = new SqlConnection(ConnectionString))
+            var apiURL = $"{BaseURL}Generic/Create";
+            var genricRequest = new GenericRecord
             {
-                conn.Open();
-                using (var cmd = new SqlCommand("INSERT INTO tblGeneric ([Key], [Value]) VALUES ('LastProcessedHashPath', @hashPath)", conn))
+                Key = "LastProcessedHashPath",
+                Value = hashPath,
+                CreatedBy = UserId,
+                Status = 1
+            };
+
+            var jsonData = JsonConvert.SerializeObject(genricRequest);
+
+            using (HttpClient client = new HttpClient())
+            {
+                client.DefaultRequestHeaders.Add("Authorization", $"Bearer {AuthToken}");
+                client.DefaultRequestHeaders.Add("Access-Control-Allow-Origin", "*");
+
+                var content = new StringContent(jsonData, Encoding.UTF8, "application/json");
+                logHandler.LogInformation($"Inserting Last processed hash path into the server database.\n Data: {jsonData}", DateTime.Now);
+                var response = client.PostAsync(apiURL, content).Result;
+
+                if (response.IsSuccessStatusCode)
                 {
-                    cmd.Parameters.AddWithValue("@hashPath", hashPath);
-                    cmd.ExecuteNonQuery();
-                    logHandler.LogInformation("Last processed hash path inserted successfully!", DateTime.Now);
+                    var responseContent = response.Content.ReadAsStringAsync().Result;
+                    var responseJson = JsonConvert.DeserializeObject<dynamic>(responseContent);
+                    logHandler.LogInformation($"{genricRequest} Last processed hash path inserted into the server database with message {responseJson.message}", DateTime.Now);
+                    logHandler.LogInformation($"{responseJson}", DateTime.Now);
                 }
+                else
+                    logHandler.LogError("Inserting Last processed hash path into the server database failed!", DateTime.Now);
             }
+
+            //using (var conn = new SqlConnection(ConnectionString))
+            //{
+            //    conn.Open();
+            //    using (var cmd = new SqlCommand("INSERT INTO tblGeneric ([Key], [Value]) VALUES ('LastProcessedHashPath', @hashPath)", conn))
+            //    {
+            //        cmd.Parameters.AddWithValue("@hashPath", hashPath);
+            //        cmd.ExecuteNonQuery();
+            //        logHandler.LogInformation("Last processed hash path inserted successfully!", DateTime.Now);
+            //    }
+            //}
         }
 
         private void UpdateProcessedHashes(List<AttendanceRecord> newRecords)
