@@ -120,6 +120,8 @@ namespace DailyUploader
 
         public void CalculateTotalPagesAndRowCountBetweenDates(int pageSize, DateTime? startDateTime, DateTime? endDateTime, out int totalPages, out int totalRowCount)
         {
+            logHandler.LogInformation($"Calculating total pages and row count between dates.", DateTime.Now);
+
             using (SqlConnection connection = new SqlConnection(ConnectionString))
             {
                 using (SqlCommand command = new SqlCommand("spCalculateTotalPagesAndRowCountBetweenDates", connection))
@@ -155,6 +157,7 @@ namespace DailyUploader
         public List<AttendanceRecord> GetFilteredAttendanceBetweenDates(int pageNumber, int pageSize, DateTime? startDateTime, DateTime? endDateTime)
         {
             List<AttendanceRecord> attendanceRecords = new List<AttendanceRecord>();
+            logHandler.LogInformation($"Fetching new records from the local database.", DateTime.Now);
 
             using (SqlConnection connection = new SqlConnection(ConnectionString))
             {
@@ -180,8 +183,8 @@ namespace DailyUploader
                         {
                             AttendanceRecord record = new AttendanceRecord
                             {
-                                EmployeeId = reader.GetInt64(reader.GetOrdinal("EmployeeId")),
-                                //TextCardNumber = reader.GetString(reader.GetOrdinal("TextCardNumber")),
+                                //EmployeeId = reader.GetInt64(reader.GetOrdinal("EmployeeId")),
+                                TextCardNumber = reader.GetString(reader.GetOrdinal("TextCardNumber")),
                                 InOutType = reader.GetString(reader.GetOrdinal("InOutType"))[0],
                                 Date = reader.GetDateTime(reader.GetOrdinal("DateTime"))
                             };
@@ -213,6 +216,8 @@ namespace DailyUploader
                 logHandler.LogInformation("No new records found in the local database.", DateTime.Now);
                 return newRecords;
             }
+
+            logHandler.LogInformation($"Iterating through {totalPages} pages to fetch new records.", DateTime.Now);
 
             for (int i = 1; i <= totalPages; i++)
             {
