@@ -264,7 +264,7 @@ namespace DailyUploader
                     var responseContent = response.Content.ReadAsStringAsync().Result;
                     var responseJson = JsonConvert.DeserializeObject<dynamic>(responseContent);
                     logHandler.LogInformation($"{newRecords.Count} new records inserted into the server database with message {responseJson.message}", DateTime.Now);
-                    logHandler.LogInformation($"{responseJson.message}", DateTime.Now);
+                    logHandler.LogInformation($"TimeLog Reponse: {responseJson}", DateTime.Now);
                 }
                 else
                     logHandler.LogError("Inserting new records into the server database failed!", DateTime.Now);
