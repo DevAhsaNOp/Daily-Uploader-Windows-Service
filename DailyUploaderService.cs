@@ -29,10 +29,16 @@ namespace DailyUploader
         private static HashSet<string> ProcessedHashes = new HashSet<string>();
         private readonly string BaseURL = ConfigurationManager.AppSettings["BaseURL"];
         private static readonly System.Timers.Timer timer = new System.Timers.Timer(120000);
+        private readonly string DeviceId = ConfigurationManager.AppSettings["DeviceId"];
+        private readonly string Latitude = ConfigurationManager.AppSettings["Latitude"];
+        private readonly string Location = ConfigurationManager.AppSettings["Location"];
         private readonly string UserEmail = ConfigurationManager.AppSettings["UserEmail"];
+        private readonly string IpAddress = ConfigurationManager.AppSettings["IpAddress"];
+        private readonly string Longitude = ConfigurationManager.AppSettings["Longitude"];
         private readonly ICustomLogHandler logHandler = new CustomLogHandler(LogsBaseDir);
         private readonly string UserPassword = ConfigurationManager.AppSettings["UserPassword"];
         private readonly static string LogsBaseDir = ConfigurationManager.AppSettings["LogsBaseDir"];
+        private readonly string LocationDetails = ConfigurationManager.AppSettings["LocationDetails"];
         private readonly string ConnectionString = ConfigurationManager.AppSettings["ConnectionString"];
         private readonly string ProcessedHashBaseDir = ConfigurationManager.AppSettings["ProcessedHashBaseDir"];
         private readonly int ScheduleTime = Convert.ToInt32(ConfigurationManager.AppSettings["ScheduleTime"]);
@@ -245,6 +251,13 @@ namespace DailyUploader
             newRecords.ForEach(r =>
             {
                 r.CreatedBy = UserId;
+                r.DeviceId = DeviceId;
+                r.Location = Location;
+                r.LocationDetails = LocationDetails;
+                r.IpAddress = IpAddress;
+                r.Latitude = Latitude;
+                r.Longitude = Longitude;
+                r.Comment = r.InOutType == 'I' ? "Check-In" : "Check-Out";
                 r.Status = 1;
             });
 
