@@ -280,7 +280,12 @@ namespace DailyUploader
                     logHandler.LogInformation($"TimeLog Reponse: {responseJson}", DateTime.Now);
                 }
                 else
+                {
+                    var responseContent = response.Content.ReadAsStringAsync().Result;
+                    var responseJson = JsonConvert.DeserializeObject<dynamic>(responseContent);
                     logHandler.LogError("Inserting new records into the server database failed!", DateTime.Now);
+                    logHandler.LogError($"TimeLog Error Reponse: {responseJson}", DateTime.Now);
+                }
             }
         }
 
