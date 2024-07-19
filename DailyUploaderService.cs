@@ -96,7 +96,7 @@ namespace DailyUploader
                 else
                     logHandler.LogInformation("No new records found in the Local database.", DateTime.Now);
 
-                Thread.Sleep(ScheduleTime * 60 * 1000);
+                Thread.Sleep(ScheduleTime * 1000);
             }
         }
 
