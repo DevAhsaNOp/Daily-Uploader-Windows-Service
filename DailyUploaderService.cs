@@ -328,8 +328,9 @@ namespace DailyUploader
 
             var jwtToken = tokenHandler.ReadJwtToken(token);
             var claims = jwtToken.Claims.ToList();
-
-            UserId = Convert.ToInt64(claims.FirstOrDefault(c => c.Type == "UserId").Value);
+            var jsonString = claims.FirstOrDefault(c => c.Type == "JsonString").Value;
+            var json = JsonConvert.DeserializeObject<dynamic>(jsonString);
+            UserId = Convert.ToInt64(json.UserId);
         }
 
         private void UploadAppConfig()
